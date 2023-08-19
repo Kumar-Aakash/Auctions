@@ -1,3 +1,4 @@
+from unicodedata import category
 from django.contrib.auth import authenticate, login, logout
 from django.db import IntegrityError
 from django.http import HttpResponse, HttpResponseRedirect
@@ -58,6 +59,25 @@ class createNew(forms.Form):
         ),
     )
 
+#Form for Bidding
+class BidForm(forms.Form):
+    top_bid = forms.IntegerField(
+        label="Place Your Bid",
+        min_value=1,
+        widget=forms.NumberInput(
+            attrs={"class": "form-control", "placeholder": "Bid $"}
+        ),
+    )
+
+#Form for posting comment
+class CommentForm(forms.Form):
+    Comment = forms.CharField(
+        min_length=3,
+        max_length=1000,
+        widget=forms.Textarea(
+            attrs={"placeholder": "Comment", "class": "form-control", "rows": 4}
+        ),
+    )
 
 #Index function renders the active products to the page
 def index(request):
@@ -66,8 +86,6 @@ def index(request):
         "auctions/index.html",
         {"products": auctionProduct.objects.filter(active=True).order_by("-time").values()},
     )
-
-
 
 
 def login_view(request):
@@ -126,7 +144,6 @@ def register(request):
         return render(request, "auctions/register.html")
 
 
-
 @login_required(login_url="login")
 def createListing(request):
     """ If called vis post validates the product data and
@@ -150,3 +167,119 @@ def createListing(request):
         else:
             return HttpResponse("Invalid Data Filled!!")
     return render(request, "auctions/create.html", {"form": createNew()})
+
+
+def listing(request, id):
+    product = auctionProduct.objects.get(pk=id)
+    hearted = True
+    # Wishlist Query
+    try:
+        user = User.objects.get(pk=request.user.id)
+        wish = Wishlist.objects.get(user=user, product=product)
+    except:
+        hearted = False
+
+    q = Bids.objects.filter(product=product).order_by("-top_bid").first()
+    no_bids = Bids.objects.filter(product=product).count()
+
+    res = global_var["res"]
+    global_var["res"] = None
+
+    try:
+        top_bid = q.top_bid
+        bider = q.bider
+    except:
+        top_bid = None
+        bider = None
+
+    comments = Comment.objects.filter(product=product).order_by("-time")
+
+    return render(
+        request,
+        "auctions/listing.html",
+        {
+            "product": product,
+            "wish": hearted,
+            "Bid": BidForm(),
+            "res": res,
+            "highest_bid": top_bid,
+            "count": no_bids,
+            "bidder": bider,
+            "CommentForm": CommentForm(),
+            "comments": comments,
+        },
+    )
+
+
+@login_required(login_url="login")
+def addWish(request):
+    if request.method == "POST":
+        user = User.objects.get(pk=request.user.id)
+        product = auctionProduct.objects.get(pk=request.POST["p_id"])
+        try:
+            w = Wishlist(user=user, product=product)
+            w.save()
+        except IntegrityError:
+            return HttpResponse("Product has been already there on your Wishlist.")
+        return HttpResponseRedirect(reverse("listing", args=(request.POST["p_id"],)))
+
+
+@login_required(login_url="login")
+def removeWish(request):
+    if request.method == "POST":
+        user = User.objects.get(pk=request.user.id)
+        product = auctionProduct.objects.get(pk=request.POST["p_id"])
+        try:
+            Wishlist.objects.filter(user=user, product=product).delete()
+        except IntegrityError:
+            return HttpResponse("Product has been already removed from your Wishlist.")
+        return HttpResponseRedirect(reverse("listing", args=(request.POST["p_id"],)))
+
+@login_required(login_url="login")
+def bid(request, id):
+    if request.method == "POST":
+        print(id)
+        form = BidForm(request.POST)
+        if form.is_valid():
+            top_bid = form.cleaned_data["top_bid"]
+            print(top_bid)
+            user = User.objects.get(pk=request.user.id)
+            product = auctionProduct.objects.get(pk=id)
+            q = (
+                Bids.objects.filter(product=product)
+                .only("top_bid")
+                .order_by("-top_bid")
+                .first()
+            )
+
+            if q is not None:
+                # print("above")
+                if top_bid > q.top_bid:
+                    global_var["res"] = "High"
+                    q = Bids(top_bid=top_bid, bider=user, product=product)
+                    q.save()
+                else:
+                    global_var["res"] = "Low"
+            else:
+                # print("below")
+                if top_bid > product.price:
+                    global_var["res"] = "High"
+                    q = Bids(top_bid=top_bid, bider=user, product=product)
+                    q.save()
+                else:
+                    global_var["res"] = "Low"
+
+            return HttpResponseRedirect(reverse("listing", args=(id,)))
+
+
+@login_required(login_url="login")
+def closeAuction(request, id):
+    if request.method == "POST":
+        product = auctionProduct.objects.get(pk=id)
+        q = Bids.objects.filter(product=product).order_by("-top_bid").first()
+        product.active = False
+        product.winner = User.objects.get(pk=q.bider.id)
+        product.save()
+        Wishlist.objects.filter(product=product).delete()
+        return HttpResponseRedirect(reverse("listing", args=(id,)))
+
