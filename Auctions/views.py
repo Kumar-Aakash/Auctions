@@ -282,3 +282,4 @@ def closeAuction(request, id):
         product.save()
         Wishlist.objects.filter(product=product).delete()
         return HttpResponseRedirect(reverse("listing", args=(id,)))
+
