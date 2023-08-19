@@ -234,3 +234,51 @@ def removeWish(request):
         except IntegrityError:
             return HttpResponse("Product has been already removed from your Wishlist.")
         return HttpResponseRedirect(reverse("listing", args=(request.POST["p_id"],)))
+
+@login_required(login_url="login")
+def bid(request, id):
+    if request.method == "POST":
+        print(id)
+        form = BidForm(request.POST)
+        if form.is_valid():
+            top_bid = form.cleaned_data["top_bid"]
+            print(top_bid)
+            user = User.objects.get(pk=request.user.id)
+            product = auctionProduct.objects.get(pk=id)
+            q = (
+                Bids.objects.filter(product=product)
+                .only("top_bid")
+                .order_by("-top_bid")
+                .first()
+            )
+
+            if q is not None:
+                # print("above")
+                if top_bid > q.top_bid:
+                    global_var["res"] = "High"
+                    q = Bids(top_bid=top_bid, bider=user, product=product)
+                    q.save()
+                else:
+                    global_var["res"] = "Low"
+            else:
+                # print("below")
+                if top_bid > product.price:
+                    global_var["res"] = "High"
+                    q = Bids(top_bid=top_bid, bider=user, product=product)
+                    q.save()
+                else:
+                    global_var["res"] = "Low"
+
+            return HttpResponseRedirect(reverse("listing", args=(id,)))
+
+
+@login_required(login_url="login")
+def closeAuction(request, id):
+    if request.method == "POST":
+        product = auctionProduct.objects.get(pk=id)
+        q = Bids.objects.filter(product=product).order_by("-top_bid").first()
+        product.active = False
+        product.winner = User.objects.get(pk=q.bider.id)
+        product.save()
+        Wishlist.objects.filter(product=product).delete()
+        return HttpResponseRedirect(reverse("listing", args=(id,)))
