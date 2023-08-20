@@ -235,6 +235,7 @@ def removeWish(request):
             return HttpResponse("Product has been already removed from your Wishlist.")
         return HttpResponseRedirect(reverse("listing", args=(request.POST["p_id"],)))
 
+
 @login_required(login_url="login")
 def bid(request, id):
     if request.method == "POST":
@@ -283,3 +284,43 @@ def closeAuction(request, id):
         Wishlist.objects.filter(product=product).delete()
         return HttpResponseRedirect(reverse("listing", args=(id,)))
 
+
+@login_required(login_url="login")
+def addComment(request, id):
+    if request.method == "POST":
+        form = CommentForm(request.POST)
+
+        if form.is_valid():
+            comment = form.cleaned_data["Comment"]
+            product = auctionProduct.objects.get(pk=id)
+            user = User.objects.get(pk=request.user.id)
+            q = Comment(comment=comment, commenter=user, product=product)
+            q.save()
+            return HttpResponseRedirect(reverse("listing", args=(id,)))
+        else:
+            return HttpResponse("Invalid Form Entry!!")
+
+
+@login_required(login_url="login")
+def watchlist(request):
+    user = User.objects.get(pk=request.user.id)
+    q = Wishlist.objects.filter(user=user).values()
+    product_id = []
+    for i in q:
+        product_id.append(i["product_id"])
+    products = auctionProduct.objects.filter(id__in=product_id)
+    print(products)
+    return render(request, "auctions/watchlist.html", {"products": products})
+
+
+def categories(request):
+    return render(request, "auctions/categories.html", {"categories": CATEGORIES})
+
+
+def getProduct(request, name):
+    products = auctionProduct.objects.filter(category=name,active=True)
+    return render(
+        request,
+        "auctions/index.html",
+        {"products": products},
+    )
