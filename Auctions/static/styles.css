@@ -63,11 +63,6 @@ body {
     padding: auto auto auto auto;
 }
 
-span{
-    color: black;
-}
-
-
 .info-block > img{
     image-rendering: auto;
     max-width: 300px;
@@ -87,3 +82,9 @@ a{
     text-decoration: none;
     color:rgb(176, 174, 174)
 }
+
+span{
+    color: black;
+}
+
+
